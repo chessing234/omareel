@@ -5,11 +5,44 @@ on:
     branches:
       - codex/validate-omareel-pr18
       - codex/validate-omareel-pr19
+      - codex/validate-omareel-pr21
 
 permissions:
   contents: read
 
 jobs:
+  camera-tests:
+    if: github.ref_name == 'codex/validate-omareel-pr21'
+    runs-on: ubuntu-24.04
+    container:
+      image: archlinux:base-devel
+      options: --privileged
+    steps:
+      - name: Install Linux camera test dependencies
+        run: |
+          sed -i '/^\[options\]/a DisableSandbox' /etc/pacman.conf
+          pacman-key --init
+          pacman-key --populate archlinux
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm --needed git qt6-base qt6-multimedia libjpeg-turbo ffmpeg pkgconf
+      - uses: actions/checkout@v4
+      - name: Build and run the production camera suite in isolation
+        run: |
+          mkdir camera-review-build
+          cat > camera-review-build/camera.pro <<EOF
+          QT += core gui multimedia testlib
+          CONFIG += testcase c++17 link_pkgconfig
+          CONFIG -= app_bundle
+          TEMPLATE = app
+          TARGET = test_cameracapture
+          SOURCES += $GITHUB_WORKSPACE/tests/test_cameracapture.cpp $GITHUB_WORKSPACE/src/plumbing/CameraCapture.cpp
+          HEADERS += $GITHUB_WORKSPACE/src/plumbing/CameraCapture.h
+          INCLUDEPATH += $GITHUB_WORKSPACE/src/plumbing
+          PKGCONFIG += libturbojpeg
+          EOF
+          useradd -m builder
+          chown -R builder "$GITHUB_WORKSPACE"
+          su builder -c 'cd camera-review-build && qmake6 camera.pro && make -j2 && ./test_cameracapture'
   recorder-tests:
     runs-on: ubuntu-24.04
     container:
