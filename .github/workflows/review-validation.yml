@@ -1,0 +1,31 @@
+name: Review regression validation
+
+on:
+  push:
+    branches:
+      - codex/validate-omareel-pr18
+      - codex/validate-omareel-pr19
+
+permissions:
+  contents: read
+
+jobs:
+  recorder-tests:
+    runs-on: ubuntu-24.04
+    container:
+      image: archlinux:base-devel
+      options: --privileged
+    steps:
+      - name: Install Linux recorder dependencies
+        run: |
+          sed -i '/^\[options\]/a DisableSandbox' /etc/pacman.conf
+          pacman-key --init
+          pacman-key --populate archlinux
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm --needed git rust ffmpeg libevdev libxkbcommon libdrm libva mesa pkgconf wayland
+      - uses: actions/checkout@v4
+      - name: Run recorder unit tests without the unrelated Hyprland plugin
+        run: |
+          useradd -m builder
+          chown -R builder "$GITHUB_WORKSPACE"
+          su builder -c 'cargo test --locked -p omareel_record --lib'
