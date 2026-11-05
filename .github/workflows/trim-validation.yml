@@ -1,0 +1,31 @@
+name: Validate unchanged trims
+on:
+  push:
+    branches: [codex/validate-noop-trims]
+permissions:
+  contents: read
+jobs:
+  core:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install media test tools
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg fontconfig
+      - name: Regression fails before the fix
+        shell: bash
+        run: |
+          cp crates/omareel_core/src/editor/clips.rs /tmp/fixed-clips.rs
+          git show a1445d9c33457781bab631aa4a0a24903506ce0e:crates/omareel_core/src/editor/clips.rs > crates/omareel_core/src/editor/clips.rs
+          set +e
+          cargo test -p omareel_core --lib unchanged_trims_preserve_redo_and_saved_state > /tmp/before.log 2>&1
+          result=$?
+          set -e
+          cat /tmp/before.log
+          test "$result" -ne 0
+          grep -q 'assertion.*failed' /tmp/before.log
+          cp /tmp/fixed-clips.rs crates/omareel_core/src/editor/clips.rs
+      - name: Full core suite with the fix
+        run: cargo test -p omareel_core --lib -- --test-threads=1
